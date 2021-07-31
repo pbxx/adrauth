@@ -1,0 +1,25 @@
+{
+  "name": "adrauth",
+  "version": "1.0.0",
+  "description": "Simple local authentication library for nodejs",
+  "main": "adrauth.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pbxx/adrauth.git"
+  },
+  "author": "Donavan Lewis",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/pbxx/adrauth/issues"
+  },
+  "homepage": "https://github.com/pbxx/adrauth#readme",
+  "dependencies": {
+    "bcrypt": "^5.0.1",
+    "cookie": "^0.4.1",
+    "pg": "^8.7.1",
+    "uuid": "^8.3.2"
+  }
+}
