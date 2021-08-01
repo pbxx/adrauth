@@ -27,18 +27,8 @@ module.exports = {
             //var self = this;
             var { PGLink } = require("adrauth-postgres");
             //var clGlobals = this;
-            this.db = new PGLink(options.connect, (err, resp) => {
-              if (err) {
-                callback(err);
-              } else {
-                expiredTokenLoop(12);
-                console.log(`pglink created`, this);
-
-                callback(null, resp);
-              }
-            });
-
-            function expiredTokenLoop(loopSecs) {
+			//spawn the loop that will check for tokens
+            this.expiredTokenLoop = (loopSecs) => {
               let console = kind.logger("adrauth > expiredTokenLoop");
               setTimeout(() => {
                 var now = new Date();
@@ -49,13 +39,26 @@ module.exports = {
                   .delete("tokens", { expiry: nowTime }, ["<"])
                   .then((done) => {
                     console.log(`expired tokens were deleted`);
-                    expiredTokenLoop(loopSecs);
+                    this.expiredTokenLoop(loopSecs);
                   })
                   .then((err) => {
                     console.error(err);
                   });
               }, loopSecs * 1000);
-            }
+            };
+			
+			//spawn a new Postgres PGLink
+            this.db = new PGLink(options.connect, (err, resp) => {
+              if (err) {
+                callback(err);
+              } else {
+                this.expiredTokenLoop(12);
+                //console.log(`pglink created`, this);
+
+                callback(null, resp);
+              }
+            });
+
           } else {
             callback(
               `connect setting required for ${options.mode}, object containing host, user, and password for connection`
