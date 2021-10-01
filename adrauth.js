@@ -3,7 +3,7 @@ var cookie = require("cookie");
 var bcrypt = require("bcrypt");
 
 var utils = require("./utils.js");
-var kind = require("./kindlog.js");
+var {KindLogs} = require('kindlogs');
 
 var globals = {
   tokentimeout: 1.2, //minutes
@@ -29,19 +29,21 @@ module.exports = {
             //var clGlobals = this;
 			//spawn the loop that will check for tokens
             this.expiredTokenLoop = (loopSecs) => {
-              let console = kind.logger("adrauth > expiredTokenLoop");
+              let console = new KindLogs("adrauth > expiredTokenLoop");
               setTimeout(() => {
                 var now = new Date();
                 var nowTime = Math.round(now.getTime() / 1000);
-                console.log(nowTime);
+                //console.log(nowTime);
 
                 this.db
                   .delete("tokens", { expiry: nowTime }, ["<"])
                   .then((done) => {
-                    console.log(`expired tokens were deleted`);
+					if (done.rowCount > 0) {
+						console.log(`${done.rowCount} expired tokens were deleted`);
+					}
                     this.expiredTokenLoop(loopSecs);
                   })
-                  .then((err) => {
+                  .catch((err) => {
                     console.error(err);
                   });
               }, loopSecs * 1000);
@@ -74,6 +76,7 @@ module.exports = {
       }
     }
     login() {
+		//var console = new KindLogs("Adrauth @> login")
       console.log(`login called`, this);
       return (req, res, next) => {
         //let console = kind.logger('adrauth.login MW');
@@ -81,38 +84,50 @@ module.exports = {
 
         var email = req.headers.email;
         var pass = req.headers.pass;
+        var rem = req.headers.rem;
         //var db = this.db;
-
+		
+		console.log(rem)
+		let tokenTimeout = rem == "false" ? this.tokentimeout : this.tokentimeout + (43800*12)
+		/*
+		if (rem != "false") {
+			//console.log(`REM WAS TRUE`)
+			tokenTimeout = this.tokentimeout + (43800*12)
+		} else {
+			//console.log(`REM WAS NOT TRUE`)
+			tokenTimeout = this.tokentimeout
+		}*/
+		
         if (email && pass) {
-          checkUser(this.db, email, pass)
-            .then((user) => {
-              //user is valid, generate key and send back
-              console.log(user);
-              getNewToken(
-                this.db,
-                email,
-                {
-                  fullname: user.fullname,
-                  permissions: user.permissions,
-                  id: user.id,
-                },
-                this.tokentimeout
-              )
-                .then((resp) => {
-                  var userToken = resp;
+			  checkUser(this.db, email, pass)
+				.then((user) => {
+				  //user is valid, generate key and send back
+				  console.log(user);
+				  getNewToken(
+					this.db,
+					email,
+					{
+					  fullname: user.fullname,
+					  permissions: user.permissions,
+					  id: user.id,
+					},
+					tokenTimeout
+				 )
+				.then((resp) => {
+				  var userToken = resp;
 
-                  if (globals.consoleLog) {
-                    console.log(`token get`);
-                    console.log(userToken);
-                    console.log(JSON.stringify(userToken));
-                  }
+				  if (globals.consoleLog) {
+					console.log(`token get`);
+					console.log(userToken);
+					console.log(JSON.stringify(userToken));
+				  }
 
-                  res.send(JSON.stringify(userToken));
-                })
-                .catch((err) => {
-                  console.error(err);
-                  res.send("nope");
-                });
+				  res.send(JSON.stringify(userToken));
+				})
+				.catch((err) => {
+				  console.error(err);
+				  res.send("nope");
+				});
             })
             .catch((err) => {
               //user is invalid
@@ -126,7 +141,7 @@ module.exports = {
     }
     refreshToken() {
       return (req, res, next) => {
-        let console = kind.logger("adrauth.refreshToken MW");
+        let console = new KindLogs("adrauth.refreshToken MW");
 
         var email = req.headers.email;
         var token = req.headers.token;
@@ -146,7 +161,7 @@ module.exports = {
     }
     logout() {
       return (req, res, next) => {
-        let console = kind.logger("adrauth.logout MW");
+        let console = new KindLogs("adrauth.logout MW");
         var db = this.db;
 
         if (req.cookies.token) {
@@ -173,7 +188,7 @@ module.exports = {
       return (req, res, next) => {
         var db = this.db;
 
-        let console = kind.logger("adrauth.checkTokenCookie MW");
+        let console = new KindLogs("adrauth.checkTokenCookie MW");
         //console.log(req.cookies);
 
         if (req.cookies.token) {
@@ -234,7 +249,7 @@ module.exports = {
       return (req, res, next) => {
         var db = this.db;
 
-        let console = kind.logger("adrauth.setPassword MW");
+        let console = new KindLogs("adrauth.setPassword MW");
         //console.log(`at middleware!!!! on setPassword`)
         if (req.cookies.token) {
           var fullToken = JSON.parse(req.cookies.token);
@@ -266,7 +281,7 @@ module.exports = {
 
 function checkUser(db, email, pass) {
   return new Promise((resolve, reject) => {
-    let console = kind.logger("adrauth > checkUser");
+    let console = new KindLogs("adrauth > checkUser");
 
     db.selectAll("users", { email })
       .then((resp) => {
@@ -296,7 +311,7 @@ function checkUser(db, email, pass) {
 
 function getNewToken(db, email, add, tokentimeout) {
   return new Promise((resolve, reject) => {
-    let console = kind.logger("adrauth > getNewToken");
+    let console = new KindLogs("adrauth > getNewToken");
 
     var token = uuidv4() + "-" + uuidv4() + "-" + uuidv4();
     var now = new Date();
@@ -344,7 +359,7 @@ function getNewToken(db, email, add, tokentimeout) {
 
 function refreshToken(db, token, email, tokentimeout) {
   return new Promise((resolve, reject) => {
-    let console = kind.logger("adrauth > refreshToken");
+    let console = new KindLogs("adrauth > refreshToken");
     //check if current token is still valid
     db.selectAll("tokens", { token, email })
       .then((resp) => {
@@ -394,7 +409,7 @@ function refreshToken(db, token, email, tokentimeout) {
 
 function logout(db, email, token) {
   return new Promise((resolve, reject) => {
-    let console = kind.logger("adrauth > logout");
+    let console = new KindLogs("adrauth > logout");
     //actually logout in the database
 
     db.delete("tokens", { token })
@@ -411,7 +426,7 @@ function logout(db, email, token) {
 
 function hasPerm(db, email, perm, userperms) {
   return new Promise((resolve, reject) => {
-    let console = kind.logger("adrauth > hasPerm");
+    let console = new KindLogs("adrauth > hasPerm");
     var perms = utils.miniCSV.parse(userperms);
 
     db.selectAll("permissions")
@@ -473,7 +488,7 @@ function hasPerm(db, email, perm, userperms) {
 
 function setPassword(db, email, pass) {
   return new Promise((reslove, reject) => {
-    let console = kind.logger("adrauth > setPassword");
+    let console = new KindLogs("adrauth > setPassword");
     bcrypt.hash(pass, 13, (err, hash) => {
       // Now we can store the password hash in db.
       if (err) {
