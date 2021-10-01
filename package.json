@@ -1,6 +1,6 @@
 {
   "name": "adrauth",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Simple local authentication library for nodejs",
   "main": "adrauth.js",
   "scripts": {
