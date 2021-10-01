@@ -1,6 +1,6 @@
 {
   "name": "adrauth",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Simple local authentication library for nodejs",
   "main": "adrauth.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "bcrypt": "^5.0.1",
     "cookie": "^0.4.1",
     "pg": "^8.7.1",
-    "uuid": "^8.3.2"
+    "uuid": "^8.3.2",
+    "kindlogs": "^2.0.0"
   }
 }
