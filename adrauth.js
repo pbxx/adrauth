@@ -201,7 +201,7 @@ module.exports = {
 
           db.selectAll("tokens", { token, email })
             .then((resp) => {
-              console.log(`GOT TO CHECKTOKENCOOKIE`);
+              //console.log(`GOT TO CHECKTOKENCOOKIE`);
               var dbToken = resp.rows[0];
               console.log(dbToken);
               if (dbToken.expiry > nowTime) {
@@ -431,49 +431,13 @@ function hasPerm(db, email, perm, userperms) {
 
     db.selectAll("permissions")
       .then((resp) => {
-        //check all db permissions to see if the required one exists
-        for (var dbperm of resp.rows) {
-          if (dbperm.name == perm) {
-            //required perm exists in database
-            //check the user's permissions to see if they have the required permission
-            for (var userperm of perms) {
-              if (userperm == dbperm.name) {
-                //this user has the required permission
-                resolve();
-                break;
-              }
-            }
-            break;
-          } else if (dbperm.isgroup === true) {
-            //this is a permission group
-            if (dbperm.name == perm) {
-              //the required permission *is* a group
-              //check the user's permissions to see if they have the required group
-              for (var userperm of perms) {
-                if (userperm == dbperm.name) {
-                  //this user has the required permission
-                  //console.log("this user has the required permission, and it is a group")
-                  resolve();
-                }
-              }
-            } else {
-              //the required permission *is not* a group
-              //check to see if this group contains the required permission
-              var groupPerms = utils.miniCSV.parse(dbperm.consists);
-              for (var groupPerm of groupPerms) {
-                //console.log(groupPerm, perm)
-                if (groupPerm == perm) {
-                  //this group has the required permission
-                  //check the user's permissions to see if they have the required permission or group
-                  for (var userperm of perms) {
-                    if (userperm == groupPerm || userperm == dbperm.name) {
-                      //this user has the required permission
-                      resolve();
-                    }
-                  }
-                }
-              }
-            }
+		let rp = getResultantPerms( perms, resp.rows )
+		  
+        //check all resultant permissions of user
+        for (var usersPerm of rp) {
+          if (usersPerm == perm) {
+			//required perm found from database
+			resolve()
           }
         }
         reject(
@@ -484,6 +448,35 @@ function hasPerm(db, email, perm, userperms) {
         reject(err);
       });
   });
+}
+
+function getResultantPerms( userPerms, permRows ) {
+	//take a db list of perms and groups, then output a list of resultant permissions
+	let keyH = {}
+	for (var perm of permRows) {
+		if ( isIn(perm.name, userPerms), perm.isgroup === true ) {
+			//It's in the user's perms, and it's a group.
+			//Shove its members into the output object
+			for (var groupPerm of utils.miniCSV.parse( perm.consists )) {
+				keyH[groupPerm] = true
+			}
+		} else if ( isIn(perm.name, userPerms), perm.isgroup === false ) {
+			//It's in the user's perms, and it's a single permission.
+			//Shove it into the output object
+			keyH[perm.name] = true
+		}
+	}
+	return Object.keys(keyH)
+}
+
+function isIn(thing, isInArr) {
+	for (var oneOfAll of isInArr) {
+		if (thing == oneOfAll) {
+			//it's here
+			return true
+		}
+	}
+	return false
 }
 
 function setPassword(db, email, pass) {
