@@ -201,7 +201,7 @@ module.exports = {
 
           db.selectAll("tokens", { token, email })
             .then((resp) => {
-              //console.log(`GOT TO CHECKTOKENCOOKIE`);
+              console.log(`GOT TO CHECKTOKENCOOKIE`);
               var dbToken = resp.rows[0];
               console.log(dbToken);
               if (dbToken.expiry > nowTime) {
@@ -426,20 +426,24 @@ function logout(db, email, token) {
 
 function hasPerm(db, email, perm, userperms) {
   return new Promise((resolve, reject) => {
-    let console = new KindLogs("adrauth > hasPerm");
-    var perms = utils.miniCSV.parse(userperms);
+    //let console = new KindLogs("adrauth > hasPerm");
+    var userPerms = utils.miniCSV.parse(userperms);
 
     db.selectAll("permissions")
       .then((resp) => {
-		let rp = getResultantPerms( perms, resp.rows )
-		  
-        //check all resultant permissions of user
-        for (var usersPerm of rp) {
-          if (usersPerm == perm) {
-			//required perm found from database
-			resolve()
-          }
-        }
+        //check all db permissions to see if the required one exists
+		//console.log(resp.rows)
+        var resultantPerms = getResultantPerms(resp.rows, userPerms)
+		//console.log(resultantPerms)
+		
+		for (var resultantPerm of resultantPerms) {
+			if (resultantPerm == perm) {
+				//user has required perm
+				resolve()
+			}
+			
+		}
+		
         reject(
           `required permission: '${perm}' was not found for user '${email}'`
         );
@@ -450,33 +454,32 @@ function hasPerm(db, email, perm, userperms) {
   });
 }
 
-function getResultantPerms( userPerms, permRows ) {
-	//take a db list of perms and groups, then output a list of resultant permissions
-	let keyH = {}
-	for (var perm of permRows) {
-		if ( isIn(perm.name, userPerms), perm.isgroup === true ) {
-			//It's in the user's perms, and it's a group.
-			//Shove its members into the output object
-			for (var groupPerm of utils.miniCSV.parse( perm.consists )) {
-				keyH[groupPerm] = true
+function getResultantPerms(dbPerms, userPermNames) {
+	//extracts resultant permission string from array of named perms/groups
+	//var userPerms = utils.miniCSV.parse(userPermNames);
+	var userPerms = userPermNames;
+	var resultantPerms = []
+	
+	for (var userPerm of userPerms) {
+		for (var dbPerm of dbPerms) {
+			//check if user has perm
+			if (userPerm == dbPerm.name) {
+				//user has this dbPerm
+				if (dbPerm.isgroup === true) {
+					//this dbPerm is a group
+					var thisGroupPerms = utils.miniCSV.parse(dbPerm.consists)
+					resultantPerms = [...resultantPerms, ...thisGroupPerms]
+				} else {
+					//this dbPerm is NOT a group
+					resultantPerms.push(dbPerm.name)
+				}
 			}
-		} else if ( isIn(perm.name, userPerms), perm.isgroup === false ) {
-			//It's in the user's perms, and it's a single permission.
-			//Shove it into the output object
-			keyH[perm.name] = true
 		}
 	}
-	return Object.keys(keyH)
-}
-
-function isIn(thing, isInArr) {
-	for (var oneOfAll of isInArr) {
-		if (thing == oneOfAll) {
-			//it's here
-			return true
-		}
-	}
-	return false
+	
+	var cleanOut = [...new Set(resultantPerms)]
+	
+	return cleanOut
 }
 
 function setPassword(db, email, pass) {
