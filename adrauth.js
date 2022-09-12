@@ -3,7 +3,7 @@ var cookie = require("cookie");
 var bcrypt = require("bcrypt");
 
 var utils = require("./utils.js");
-var {KindLogs} = require('kindlogs');
+var { KindLogs } = require('kindlogs');
 
 var globals = {
   tokentimeout: 1.2, //minutes
@@ -27,7 +27,7 @@ module.exports = {
             //var self = this;
             var { PGLink } = require("adrauth-postgres");
             //var clGlobals = this;
-			//spawn the loop that will check for tokens
+            //spawn the loop that will check for tokens
             this.expiredTokenLoop = (loopSecs) => {
               let console = new KindLogs("adrauth > expiredTokenLoop");
               setTimeout(() => {
@@ -38,9 +38,9 @@ module.exports = {
                 this.db
                   .delete("tokens", { expiry: nowTime }, ["<"])
                   .then((done) => {
-					if (done.rowCount > 0) {
-						console.log(`${done.rowCount} expired tokens were deleted`);
-					}
+                    if (done.rowCount > 0) {
+                      console.log(`${done.rowCount} expired tokens were deleted`);
+                    }
                     this.expiredTokenLoop(loopSecs);
                   })
                   .catch((err) => {
@@ -48,8 +48,8 @@ module.exports = {
                   });
               }, loopSecs * 1000);
             };
-			
-			//spawn a new Postgres PGLink
+
+            //spawn a new Postgres PGLink
             this.db = new PGLink(options.connect, (err, resp) => {
               if (err) {
                 callback(err);
@@ -76,7 +76,7 @@ module.exports = {
       }
     }
     login() {
-		//var console = new KindLogs("Adrauth @> login")
+      //var console = new KindLogs("Adrauth @> login")
       console.log(`login called`, this);
       return (req, res, next) => {
         //let console = kind.logger('adrauth.login MW');
@@ -86,48 +86,48 @@ module.exports = {
         var pass = req.headers.pass;
         var rem = req.headers.rem;
         //var db = this.db;
-		
-		console.log(rem)
-		let tokenTimeout = rem == "false" ? this.tokentimeout : this.tokentimeout + (43800*12)
-		/*
-		if (rem != "false") {
-			//console.log(`REM WAS TRUE`)
-			tokenTimeout = this.tokentimeout + (43800*12)
-		} else {
-			//console.log(`REM WAS NOT TRUE`)
-			tokenTimeout = this.tokentimeout
-		}*/
-		
+
+        console.log(rem)
+        let tokenTimeout = rem == "false" ? this.tokentimeout : this.tokentimeout + (43800 * 12)
+        /*
+        if (rem != "false") {
+          //console.log(`REM WAS TRUE`)
+          tokenTimeout = this.tokentimeout + (43800*12)
+        } else {
+          //console.log(`REM WAS NOT TRUE`)
+          tokenTimeout = this.tokentimeout
+        }*/
+
         if (email && pass) {
-			  checkUser(this.db, email, pass)
-				.then((user) => {
-				  //user is valid, generate key and send back
-				  console.log(user);
-				  getNewToken(
-					this.db,
-					email,
-					{
-					  fullname: user.fullname,
-					  permissions: user.permissions,
-					  id: user.id,
-					},
-					tokenTimeout
-				 )
-				.then((resp) => {
-				  var userToken = resp;
+          checkUser(this.db, email, pass)
+            .then((user) => {
+              //user is valid, generate key and send back
+              console.log(user);
+              getNewToken(
+                this.db,
+                email,
+                {
+                  fullname: user.fullname,
+                  permissions: user.permissions,
+                  id: user.id,
+                },
+                tokenTimeout
+              )
+                .then((resp) => {
+                  var userToken = resp;
 
-				  if (globals.consoleLog) {
-					console.log(`token get`);
-					console.log(userToken);
-					console.log(JSON.stringify(userToken));
-				  }
+                  if (globals.consoleLog) {
+                    console.log(`token get`);
+                    console.log(userToken);
+                    console.log(JSON.stringify(userToken));
+                  }
 
-				  res.send(JSON.stringify(userToken));
-				})
-				.catch((err) => {
-				  console.error(err);
-				  res.send("nope");
-				});
+                  res.send(JSON.stringify(userToken));
+                })
+                .catch((err) => {
+                  console.error(err);
+                  res.send("nope");
+                });
             })
             .catch((err) => {
               //user is invalid
@@ -432,18 +432,18 @@ function hasPerm(db, email, perm, userperms) {
     db.selectAll("permissions")
       .then((resp) => {
         //check all db permissions to see if the required one exists
-		//console.log(resp.rows)
+        //console.log(resp.rows)
         var resultantPerms = getResultantPerms(resp.rows, userPerms)
-		//console.log(resultantPerms)
-		
-		for (var resultantPerm of resultantPerms) {
-			if (resultantPerm == perm) {
-				//user has required perm
-				resolve()
-			}
-			
-		}
-		
+        //console.log(resultantPerms)
+
+        for (var resultantPerm of resultantPerms) {
+          if (resultantPerm == perm) {
+            //user has required perm
+            resolve()
+          }
+
+        }
+
         reject(
           `required permission: '${perm}' was not found for user '${email}'`
         );
@@ -455,31 +455,31 @@ function hasPerm(db, email, perm, userperms) {
 }
 
 function getResultantPerms(dbPerms, userPermNames) {
-	//extracts resultant permission string from array of named perms/groups
-	//var userPerms = utils.miniCSV.parse(userPermNames);
-	var userPerms = userPermNames;
-	var resultantPerms = []
-	
-	for (var userPerm of userPerms) {
-		for (var dbPerm of dbPerms) {
-			//check if user has perm
-			if (userPerm == dbPerm.name) {
-				//user has this dbPerm
-				if (dbPerm.isgroup === true) {
-					//this dbPerm is a group
-					var thisGroupPerms = utils.miniCSV.parse(dbPerm.consists)
-					resultantPerms = [...resultantPerms, ...thisGroupPerms]
-				} else {
-					//this dbPerm is NOT a group
-					resultantPerms.push(dbPerm.name)
-				}
-			}
-		}
-	}
-	
-	var cleanOut = [...new Set(resultantPerms)]
-	
-	return cleanOut
+  //extracts resultant permission string from array of named perms/groups
+  //var userPerms = utils.miniCSV.parse(userPermNames);
+  var userPerms = userPermNames;
+  var resultantPerms = []
+
+  for (var userPerm of userPerms) {
+    for (var dbPerm of dbPerms) {
+      //check if user has perm
+      if (userPerm == dbPerm.name) {
+        //user has this dbPerm
+        if (dbPerm.isgroup === true) {
+          //this dbPerm is a group
+          var thisGroupPerms = utils.miniCSV.parse(dbPerm.consists)
+          resultantPerms = [...resultantPerms, ...thisGroupPerms]
+        } else {
+          //this dbPerm is NOT a group
+          resultantPerms.push(dbPerm.name)
+        }
+      }
+    }
+  }
+
+  var cleanOut = [...new Set(resultantPerms)]
+
+  return cleanOut
 }
 
 function setPassword(db, email, pass) {
