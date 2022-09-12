@@ -1,6 +1,6 @@
 {
   "name": "adrauth",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Simple local authentication library for nodejs",
   "main": "adrauth.js",
   "scripts": {
@@ -15,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/pbxx/adrauth/issues"
   },
-  "homepage": "https://github.com/pbxx/adrauth#readme",
+  "homepage": "https://github.com/pbxx/adrauth",
   "dependencies": {
     "bcrypt": "^5.0.1",
     "cookie": "^0.4.1",
