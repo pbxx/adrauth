@@ -60,53 +60,20 @@ module.exports = {
 					//make sure <object> is an actual object
 					if (typeof(object) == "object" && !Array.isArray(object)) {
 						if (typeof(table) == "string") {
-							var colsArr = Object.keys(object);
-							var valuesArr = [];
-							var valDollarIncrement = 1;
-							var valDollars = "";
-							var cols = "";
-							
-							if (colsArr.length > 1) {
-								//iterate through all keys
-								for (var key of colsArr) {
-									if (key == colsArr[colsArr.length-1]) {
-										//this is the last key, dont add a comma to <cols>
-										cols += key;
-										valDollars += ("$" + valDollarIncrement)
-										valuesArr.push(object[key]);
-									} else {
-										//this is *not* the last key
-										cols += `${key}, `;
-										valDollars += ("$" + valDollarIncrement + ", ")
-										valDollarIncrement++
-										valuesArr.push(object[key]);
-									}
-								}
-							} else {
-								//only one key, no need to loop
-								cols = colsArr[0];
-								valDollars = "$1"
-								valuesArr.push(object[colsArr[0]]);
-							}
-							
-							this.pool.connect((err, client, release) => {
-								if (err) {
-									return console.error('Error acquiring client', err.stack)
-								}
-								var query = `INSERT INTO ${table}(${cols}) VALUES (${valDollars});`;
-								console.log(query)
-								if (globals.consoleLog) { console.log("[INFO db.insert]", cols, valuesArr, valDollars, query) }
-								client.query(query, valuesArr, (err, res) => {
-									if (err) {
-										//err writing to db
-										release()
-										reject(err)
-									} else {
-										//item written to db
-										release()
-										resolve(res)
-									}
-								})
+							processValues(object)
+							.then((valueSet) => {
+								var query = `INSERT INTO ${table}(${valueSet.cols}) VALUES (${valueSet.valDollars});`;
+								dbQuery(this.pool, query, valueSet.valArray)
+                                .then((queryRes) => {
+                                    resolve(queryRes)
+                                })
+                                .catch((err) => {
+                                    reject(err)
+                                })
+
+							})
+							.catch((err) => {
+								reject(err)
 							})
 							
 							
@@ -1005,6 +972,46 @@ function processCases(cases, opArray) {
             resolve({doCases: false})
         }
     }) 
+}
+
+function processValues(object) {
+	return new Promise((resolve, reject) => {
+		try {
+			var colsArr = Object.keys(object);
+			var valArray = [];
+			var valDollarIncrement = 1;
+			var valDollars = "";
+			var cols = "";
+			
+			if (colsArr.length > 1) {
+				//iterate through all keys
+				for (var key of colsArr) {
+					if (key == colsArr[colsArr.length-1]) {
+						//this is the last key, dont add a comma to <cols>
+						cols += key;
+						valDollars += ("$" + valDollarIncrement)
+						valArray.push(object[key]);
+					} else {
+						//this is *not* the last key
+						cols += `${key}, `;
+						valDollars += ("$" + valDollarIncrement + ", ")
+						valDollarIncrement++
+						valArray.push(object[key]);
+					}
+				}
+			} else {
+				//only one key, no need to loop
+				cols = colsArr[0];
+				valDollars = "$1"
+				valArray.push(object[colsArr[0]]);
+			}
+
+			resolve({cols, valArray, valDollars})
+		} catch (err) {
+			reject(err)
+		}
+
+	})
 }
 
 function dbQuery(pool, query, valArray) {
