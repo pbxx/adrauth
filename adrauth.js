@@ -3,7 +3,6 @@ var cookie = require("cookie");
 var bcrypt = require("bcrypt");
 
 var utils = require("./utils.js");
-var { KindLogs } = require('kindlogs');
 
 var globals = {
   tokentimeout: 1.2, //minutes
@@ -17,19 +16,32 @@ module.exports = {
       //console.log(`constructor start`, this)
       if (options.mode) {
         if (options.mode == "postgres") {
+          var { DBLink } = require("./connectors/postgres.js");
+
+        } else if (options.mode == "single-json-file") {
+          var { DBLink } = require("./connectors/singleJSON.js");
+
+        } else if (options.mode == "s3") {
+          var { DBLink } = require("./connectors/s3.js");
+          
+        } else {
+          callback(
+            `mode setting does not match any compatible modes. got '${options.mode}'`
+          );
+        }
+
           if (options.connect) {
             if (!options.tokentimeout) {
               options.tokentimeout = 7;
             }
 
-            //console.log(`pglink omw`, this)
+            //console.log(`DBLink omw`, this)
             this.tokentimeout = options.tokentimeout;
             //var self = this;
-            var { PGLink } = require("adrauth-postgres");
+            
             //var clGlobals = this;
             //spawn the loop that will check for tokens
             this.expiredTokenLoop = (loopSecs) => {
-              let console = new KindLogs("adrauth > expiredTokenLoop");
               setTimeout(() => {
                 var now = new Date();
                 var nowTime = Math.round(now.getTime() / 1000);
@@ -49,13 +61,13 @@ module.exports = {
               }, loopSecs * 1000);
             };
 
-            //spawn a new Postgres PGLink
-            this.db = new PGLink(options.connect, (err, resp) => {
+            //spawn a new Postgres DBLink
+            this.db = new DBLink(options.connect, (err, resp) => {
               if (err) {
                 callback(err);
               } else {
                 this.expiredTokenLoop(12);
-                //console.log(`pglink created`, this);
+                //console.log(`DBLink created`, this);
 
                 callback(null, resp);
               }
@@ -66,17 +78,12 @@ module.exports = {
               `connect setting required for ${options.mode}, object containing host, user, and password for connection`
             );
           }
-        } else {
-          callback(
-            `mode setting does not match any compatible modes. got '${options.mode}'`
-          );
-        }
+        
       } else {
         callback("mode setting is required to spawn adrauth");
       }
     }
     login() {
-      //var console = new KindLogs("Adrauth @> login")
       console.log(`login called`, this);
       return (req, res, next) => {
         //let console = kind.logger('adrauth.login MW');
@@ -141,7 +148,6 @@ module.exports = {
     }
     refreshToken() {
       return (req, res, next) => {
-        let console = new KindLogs("adrauth.refreshToken MW");
 
         var email = req.headers.email;
         var token = req.headers.token;
@@ -161,7 +167,6 @@ module.exports = {
     }
     logout() {
       return (req, res, next) => {
-        let console = new KindLogs("adrauth.logout MW");
         var db = this.db;
 
         if (req.cookies.token) {
@@ -187,8 +192,6 @@ module.exports = {
     checkTokenCookie(permReq) {
       return (req, res, next) => {
         var db = this.db;
-
-        let console = new KindLogs("adrauth.checkTokenCookie MW");
         //console.log(req.cookies);
 
         if (req.cookies.token) {
@@ -248,8 +251,6 @@ module.exports = {
     setPassword(/* cookies and headers only :3 */) {
       return (req, res, next) => {
         var db = this.db;
-
-        let console = new KindLogs("adrauth.setPassword MW");
         //console.log(`at middleware!!!! on setPassword`)
         if (req.cookies.token) {
           var fullToken = JSON.parse(req.cookies.token);
@@ -281,8 +282,6 @@ module.exports = {
 
 function checkUser(db, email, pass) {
   return new Promise((resolve, reject) => {
-    let console = new KindLogs("adrauth > checkUser");
-
     db.selectAll("users", { email })
       .then((resp) => {
         if (resp.rows.length > 0) {
@@ -311,7 +310,6 @@ function checkUser(db, email, pass) {
 
 function getNewToken(db, email, add, tokentimeout) {
   return new Promise((resolve, reject) => {
-    let console = new KindLogs("adrauth > getNewToken");
 
     var token = uuidv4() + "-" + uuidv4() + "-" + uuidv4();
     var now = new Date();
@@ -359,7 +357,6 @@ function getNewToken(db, email, add, tokentimeout) {
 
 function refreshToken(db, token, email, tokentimeout) {
   return new Promise((resolve, reject) => {
-    let console = new KindLogs("adrauth > refreshToken");
     //check if current token is still valid
     db.selectAll("tokens", { token, email })
       .then((resp) => {
@@ -409,7 +406,6 @@ function refreshToken(db, token, email, tokentimeout) {
 
 function logout(db, email, token) {
   return new Promise((resolve, reject) => {
-    let console = new KindLogs("adrauth > logout");
     //actually logout in the database
 
     db.delete("tokens", { token })
@@ -426,7 +422,6 @@ function logout(db, email, token) {
 
 function hasPerm(db, email, perm, userperms) {
   return new Promise((resolve, reject) => {
-    //let console = new KindLogs("adrauth > hasPerm");
     var userPerms = utils.miniCSV.parse(userperms);
 
     db.selectAll("permissions")
@@ -484,7 +479,6 @@ function getResultantPerms(dbPerms, userPermNames) {
 
 function setPassword(db, email, pass) {
   return new Promise((reslove, reject) => {
-    let console = new KindLogs("adrauth > setPassword");
     bcrypt.hash(pass, 13, (err, hash) => {
       // Now we can store the password hash in db.
       if (err) {
