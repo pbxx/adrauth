@@ -15,36 +15,38 @@ var adrauth = new Adrauth({ mode: 'postgres', connect }, (err, resp) => {
     }
 })
 
-//test database select
-adrauth.db.selectAll("semantics", {name: 'openenroll'})
-.then((res) => {
-    console.log("test database select:")
-    console.log(res.rows)
-})
-.catch(err => {
-    console.error(err)
-})
+
 
 //test database select all
 adrauth.db.selectAll("semantics")
 .then((res) => {
     console.log("test database select all:")
     console.log(res.rows)
+    
 })
 .catch(err => {
     console.error(err)
 })
 
-//test getting table primKeyInfo
-/*
-adrauth.db.primKeyInfo({table: "tokens"})
+//test database select cols with case
+adrauth.db.selectCols("books", "urltitle, title", {author: 'By Bristol Loren'})
 .then((res) => {
-    console.log("test getting table primKeyInfo:")
+    console.log("test database select cols with case:")
     console.log(res.rows)
 })
 .catch(err => {
     console.error(err)
-})*/
+})
+
+//test database select cols
+adrauth.db.selectCols("books", "urltitle, title")
+.then((res) => {
+    console.log("test database select cols:")
+    console.log(res.rows)
+})
+.catch(err => {
+    console.error(err)
+})
 
 //test heal primKey sequence
 adrauth.db.healPrimKeys({table: "semantics"})
@@ -52,27 +54,33 @@ adrauth.db.healPrimKeys({table: "semantics"})
     console.log("test heal primKey sequence:")
     console.log(res)
 
-    //test database insert
-    adrauth.db.insert("semantics", {name: "testSem", val: "I work well!"})
-    .then((res) => {
-        console.log("test database insert:")
-        console.log(res.rows)
-        //test database delete
-        adrauth.db.delete("semantics", {name: "testSem"})
-        .then((res) => {
-            console.log("test database delete:")
-            console.log(res.rows)
-        })
-        .catch(err => {
-            console.error(err)
-        })
-    })
-    .catch(err => {
-        console.error(err)
-    })
+    
 
 })
 .catch(err => {
     console.error(err)
 })
 
+
+//test database insert
+adrauth.db.insert("semantics", {name: "testSem", val: "I work well!"})
+.then((res) => {
+    console.log("test database insert:")
+    console.log(res.rows)
+    
+    
+    
+})
+.catch(err => {
+    console.error(err)
+})
+
+//test database delete
+adrauth.db.delete("semantics", {name: "testSem"})
+.then((res) => {
+    console.log("test database delete:")
+    console.log(res.rows)
+})
+.catch(err => {
+    console.error(err)
+})

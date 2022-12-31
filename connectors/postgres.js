@@ -112,7 +112,7 @@ module.exports = {
 								//handle error
 								reject({errText: `[ERR: ${fName}] Error running processCases()`, err})
 							})
-							
+
 						} else {
 							reject(`[ERR: ${fName}] First argument must be of type 'string', got '${typeof(table)}'.`)
 						}
@@ -185,22 +185,13 @@ module.exports = {
 					//object keys will become columns, object values will be written to those columns
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
-						this.pool.connect((err, client, release) => {
-							if (err) {
-								return console.error('Error acquiring client', err.stack)
-							}
-							
-							var query = `SELECT reltuples AS estimate FROM pg_class WHERE relname = '${table}';`;
-							client.query(query, (err, res) => {
-								if (err) {
-									//err writing to db
-									release()
-									reject(err)
-								}
-								//item written to db
-								release()
-								resolve(res.rows[0].estimate)
-							})
+						var query = `SELECT reltuples AS estimate FROM pg_class WHERE relname = '${table}';`;
+						dbQuery(this.pool, query, valueSet.valArray)
+						.then((queryRes) => {
+							resolve(queryRes)
+						})
+						.catch((err) => {
+							reject(err)
 						})
 						
 					} else {
@@ -218,22 +209,14 @@ module.exports = {
 					//object keys will become columns, object values will be written to those columns
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
-						this.pool.connect((err, client, release) => {
-							if (err) {
-								return console.error('Error acquiring client', err.stack)
-							}
-							
-							var query = `SELECT count(*) FROM ${table};`;
-							client.query(query, (err, res) => {
-								if (err) {
-									//err writing to db
-									release()
-									reject(err)
-								}
-								//item written to db
-								release()
-								resolve(res.rows[0].count)
-							})
+						var query = `SELECT count(*) FROM ${table};`;
+
+						dbQuery(this.pool, query, valueSet.valArray)
+						.then((queryRes) => {
+							resolve(queryRes)
+						})
+						.catch((err) => {
+							reject(err)
 						})
 						
 					} else {
@@ -252,119 +235,35 @@ module.exports = {
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
 						if (typeof(cols) == "string") {
-							var oaIncrement = 0;
-							var valDollarIncrement = 1;
-							var valArray = [];
-							var valCases = "";
-							
 							if (typeof(cases) == "object" && !Array.isArray(cases)) {
-								var casesArr = Object.keys(cases);
-								if (casesArr.length > 1) {
-									//iterate through all keys
-									for (var ncase of casesArr) {
-										if (ncase == casesArr[casesArr.length-1]) {
-											//this is the last ncase
-											if (opArray) {
-												if (Array.isArray(opArray)) {
-													//an operator array was passed, and it is actually an array
-													if (typeof(opArray[oaIncrement]) == "string") {
-														valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
-														valArray.push(cases[ncase]);
-														valDollarIncrement++;
-														oaIncrement++;
-													} else {
-														//all opArray items must be string
-														reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-													}
-												} else {
-													//opArray must be array
-													reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-												}
-											} else {
-												//no opArray was passed at all, or it was falsy
-												valCases += `${ncase} = ` + "$" + valDollarIncrement;
-												valArray.push(cases[ncase]);
-												valDollarIncrement++;
-											}
-										} else {
-											//this is *not* the last ncase
-											if (opArray) {
-												if (Array.isArray(opArray)) {
-													//an operator array was passed, and it is actually an array
-													if (typeof(opArray[oaIncrement]) == "string") {
-														valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
-														valArray.push(cases[ncase]);
-														valDollarIncrement++;
-														oaIncrement++;
-													} else {
-														//all opArray items must be string
-														reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-													}
-												} else {
-													//opArray must be array
-													reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-												}
-											} else {
-												//no opArray was passed at all, or it was falsy
-												valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
-												valArray.push(cases[ncase]);
-												valDollarIncrement++;
-												
-											}
-										}
-									}
-								} else {
-									//only one ncase, no need to loop
-									if (opArray && Array.isArray(opArray)) {
-										valCases = `${casesArr[0]} ${opArray[0]} ` + "$1";
-										valArray.push(cases[casesArr[0]]);
-									} else {
-										valCases = `${casesArr[0]} = ` + "$1";
-										valArray.push(cases[casesArr[0]]);
-									}
-								}
-							}
-							
-							
-							
-							//var query = `INSERT INTO ${table}(${cols}) VALUES (${valCases});`;
-							if (typeof(cases) == "object" && !Array.isArray(cases)) {
-								this.pool.connect((err, client, release) => {
-									if (err) {
-										return console.error('Error acquiring client', err.stack)
-									}
-									var query = `SELECT ${cols} FROM ${table} WHERE ${valCases};`;
-									if (globals.consoleLog) { console.log(`[INFO ${fName}]`, valArray, valCases, query) }
-									client.query(query, valArray, (err, res) => {
-										if (err) {
-											//err writing to db
-											release()
-											reject(err)
-										}
-										//item written to db
-										release()
-										resolve(res)
+								processCases(cases, opArray)
+								.then((valueSet) => {
+									var query = `SELECT ${cols} FROM ${table} WHERE ${valueSet.valCases};`;
+
+									dbQuery(this.pool, query, valueSet.valArray)
+									.then((queryRes) => {
+										resolve(queryRes)
+									})
+									.catch((err) => {
+										reject(err)
 									})
 								})
-								
-								
+								.catch((err) => {
+									//error running processCases()
+									//handle error
+									reject({errText: `[ERR: ${fName}] Error running processCases()`, err})
+								})
+
 							} else {
-								this.pool.connect((err, client, release) => {
-									if (err) {
-										return console.error('Error acquiring client', err.stack)
-									}
-									var query = `SELECT ${cols} FROM ${table}`;
-									if (globals.consoleLog) { console.log(`[INFO ${fName}]`, query) }
-									client.query(query, (err, res) => {
-										if (err) {
-											//err writing to db
-											release()
-											reject(err)
-										}
-										//item written to db
-										release()
-										resolve(res)
-									})
+
+								var query = `SELECT ${cols} FROM ${table}`;
+
+								dbQuery(this.pool, query)
+								.then((queryRes) => {
+									resolve(queryRes)
+								})
+								.catch((err) => {
+									reject(err)
 								})
 								
 							}
@@ -764,7 +663,7 @@ module.exports = {
 									c.contype = 'p' -- p = primary key constraint
 									AND c.conrelid = '${options.schema}.${options.table}'::REGCLASS;`
 				
-				console.log(query)
+				//console.log(query)
 				dbQuery(this.pool, query)
 				.then((DBprimKey) => {
 					var primKey = DBprimKey.rows[0].pk
@@ -778,17 +677,17 @@ module.exports = {
 							
 							dbQuery(this.pool, `SELECT setval('${options.schema}."${options.table}_${primKey}_seq"', ${parseInt(maxKey)});`)
 							.then((queryRes) => {
-								console.log(queryRes.rows)
+								//console.log(queryRes.rows)
 								resolve({ schema: options.schema, table: options.table })
 							})
 							.catch((err) => {
-								//Error getting the primary key of the requested table
+								//in db query
 								reject(err)
 							})
 
 						})
 						.catch((err) => {
-							//Error getting the primary key of the requested table
+							//Error checking max number in <prim key> column of the table
 							reject(err)
 						})
 					
