@@ -57,6 +57,15 @@ adrauth.db.healPrimKeys({table: "semantics"})
     .then((res) => {
         console.log("test database insert:")
         console.log(res.rows)
+        //test database delete
+        adrauth.db.delete("semantics", {name: "testSem"})
+        .then((res) => {
+            console.log("test database delete:")
+            console.log(res.rows)
+        })
+        .catch(err => {
+            console.error(err)
+        })
     })
     .catch(err => {
         console.error(err)
