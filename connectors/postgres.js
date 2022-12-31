@@ -865,46 +865,9 @@ module.exports = {
 				})
 			})
 		}
-		primKeyInfo(opts) {
-			return new Promise((resolve, reject) => {
-				//this heals numeric primary key sequences when they error irrationally after things like backup-loads
-				var defaults = {
-					schema: "public",
-				}
-				var options = {
-					...defaults,
-					...opts
-				}
-
-				// Step 1) Get the primary key of the requested table
-				/*
-				var query = `
-				SELECT a.attname
-				FROM   pg_index i
-				JOIN   pg_attribute a ON a.attrelid = i.indrelid
-									AND a.attnum = ANY(i.indkey)
-				WHERE  i.indrelid = '${options.schema}.${options.table}'::regclass
-				AND    i.indisprimary;
-				`*/
-
-				//var query = `SELECT MAX(id) FROM public.semantics;`
-				var query = `SELECT nextval('public."semantics_id_seq"');`
-				console.log(query)
-				dbQuery(this.pool, query)
-				.then((queryRes) => {
-					// Step 2) Check max of the prom key in the table 
-
-					resolve(queryRes)
-				})
-				.catch((err) => {
-					//Error getting the primary key of the requested table
-					reject(err)
-				})
-			})
-		}
 		healPrimKeys(opts) {
 			return new Promise((resolve, reject) => {
-				//this heals numeric primary key sequences when they error irrationally after things like backup-loads
+				//this function heals numeric primary key sequences when they error irrationally after things like backup-loads
 				var defaults = {
 					schema: "public",
 				}
@@ -932,36 +895,19 @@ module.exports = {
 						dbQuery(this.pool, `SELECT MAX(${primKey}) FROM ${options.schema}.${options.table};`)
 						.then((queryRes) => {
 							var maxKey = queryRes.rows[0].max
-							// Step 3) Check the current next number to be used as <prim key>
-							dbQuery(this.pool, `SELECT nextval('${options.schema}."${options.table}_${primKey}_seq"');`)
+							// Step 3) The next primkey number should be one higher than the max value,
+							// 	if it is not, set the next key value to the current max number, so the next value will be the next number after the following query increments it
+							
+							dbQuery(this.pool, `SELECT setval('${options.schema}."${options.table}_${primKey}_seq"', ${parseInt(maxKey)});`)
 							.then((queryRes) => {
-								var nextKeyVal = queryRes.rows[0].nextval
-								var cleanNeeded = (!(parseInt(maxKey) === parseInt(nextKeyVal) - 1)) //boolean
-								// Step 4) The next primkey number should be one higher than the max value,
-								// 	if it is not, set the next key value to the current max number, so the next value will be the next number after the following query increments it
-								//if (cleanNeeded) {
-								if (true) {
-									//primkey number is not 1 higher, fix this
-									//var newNext = parseInt(maxKey) + 1 //this is un-needed because the heal function increments the key
-									dbQuery(this.pool, `SELECT setval('${options.schema}."${options.table}_${primKey}_seq"', ${parseInt(maxKey)});`)
-									.then((queryRes) => {
-										console.log(queryRes.rows)
-										resolve({ cleanNeeded, schema: options.schema, table: options.table, maxKey, nextKeyVal })
-									})
-									.catch((err) => {
-										//Error getting the primary key of the requested table
-										reject(err)
-									})
-
-								} else {
-									//primkey number
-									resolve({ cleanNeeded, schema: options.schema, table: options.table, maxKey, nextKeyVal })
-								}
+								console.log(queryRes.rows)
+								resolve({ schema: options.schema, table: options.table })
 							})
 							.catch((err) => {
 								//Error getting the primary key of the requested table
 								reject(err)
 							})
+
 						})
 						.catch((err) => {
 							//Error getting the primary key of the requested table
