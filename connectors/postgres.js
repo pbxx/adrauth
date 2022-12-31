@@ -2,7 +2,7 @@ const { Pool, Client } = require('pg')
 const { v4: uuidv4 } = require('uuid');
 var bcrypt = require('bcrypt');
 
-var utils = require("./utils.js");
+var utils = require("../utils.js");
 
 var globals = {
 	consoleLog: false,
@@ -52,7 +52,6 @@ module.exports = {
 				callback("PostgreSQL host required")
 			}
 		}
-
 		insert(table, object) {
 			return new Promise((resolve, reject) => {
 				try {
@@ -95,16 +94,18 @@ module.exports = {
 									return console.error('Error acquiring client', err.stack)
 								}
 								var query = `INSERT INTO ${table}(${cols}) VALUES (${valDollars});`;
+								console.log(query)
 								if (globals.consoleLog) { console.log("[INFO db.insert]", cols, valuesArr, valDollars, query) }
 								client.query(query, valuesArr, (err, res) => {
 									if (err) {
 										//err writing to db
 										release()
 										reject(err)
+									} else {
+										//item written to db
+										release()
+										resolve(res)
 									}
-									//item written to db
-									release()
-									resolve(res)
 								})
 							})
 							
@@ -864,6 +865,116 @@ module.exports = {
 				})
 			})
 		}
+		primKeyInfo(opts) {
+			return new Promise((resolve, reject) => {
+				//this heals numeric primary key sequences when they error irrationally after things like backup-loads
+				var defaults = {
+					schema: "public",
+				}
+				var options = {
+					...defaults,
+					...opts
+				}
+
+				// Step 1) Get the primary key of the requested table
+				/*
+				var query = `
+				SELECT a.attname
+				FROM   pg_index i
+				JOIN   pg_attribute a ON a.attrelid = i.indrelid
+									AND a.attnum = ANY(i.indkey)
+				WHERE  i.indrelid = '${options.schema}.${options.table}'::regclass
+				AND    i.indisprimary;
+				`*/
+
+				//var query = `SELECT MAX(id) FROM public.semantics;`
+				var query = `SELECT nextval('public."semantics_id_seq"');`
+				console.log(query)
+				dbQuery(this.pool, query)
+				.then((queryRes) => {
+					// Step 2) Check max of the prom key in the table 
+
+					resolve(queryRes)
+				})
+				.catch((err) => {
+					//Error getting the primary key of the requested table
+					reject(err)
+				})
+			})
+		}
+		healPrimKeys(opts) {
+			return new Promise((resolve, reject) => {
+				//this heals numeric primary key sequences when they error irrationally after things like backup-loads
+				var defaults = {
+					schema: "public",
+				}
+				var options = {
+					...defaults,
+					...opts
+				}
+
+				// Step 1) Get the primary key of the requested table
+				var query = `SELECT string_agg(a.attname, ', ') AS pk
+								FROM
+									pg_constraint AS c
+									CROSS JOIN LATERAL UNNEST(c.conkey) AS cols(colnum) -- conkey is a list of the columns of the constraint; so we split it into rows so that we can join all column numbers onto their names in pg_attribute
+									INNER JOIN pg_attribute AS a ON a.attrelid = c.conrelid AND cols.colnum = a.attnum
+								WHERE
+									c.contype = 'p' -- p = primary key constraint
+									AND c.conrelid = '${options.schema}.${options.table}'::REGCLASS;`
+				
+				console.log(query)
+				dbQuery(this.pool, query)
+				.then((DBprimKey) => {
+					var primKey = DBprimKey.rows[0].pk
+
+						// Step 2) Check max number in <prim key> column of the table
+						dbQuery(this.pool, `SELECT MAX(${primKey}) FROM ${options.schema}.${options.table};`)
+						.then((queryRes) => {
+							var maxKey = queryRes.rows[0].max
+							// Step 3) Check the current next number to be used as <prim key>
+							dbQuery(this.pool, `SELECT nextval('${options.schema}."${options.table}_${primKey}_seq"');`)
+							.then((queryRes) => {
+								var nextKeyVal = queryRes.rows[0].nextval
+								var cleanNeeded = (!(parseInt(maxKey) === parseInt(nextKeyVal) - 1)) //boolean
+								// Step 4) The next primkey number should be one higher than the max value,
+								// 	if it is not, set the next key value to the current max number, so the next value will be the next number after the following query increments it
+								//if (cleanNeeded) {
+								if (true) {
+									//primkey number is not 1 higher, fix this
+									//var newNext = parseInt(maxKey) + 1 //this is un-needed because the heal function increments the key
+									dbQuery(this.pool, `SELECT setval('${options.schema}."${options.table}_${primKey}_seq"', ${parseInt(maxKey)});`)
+									.then((queryRes) => {
+										console.log(queryRes.rows)
+										resolve({ cleanNeeded, schema: options.schema, table: options.table, maxKey, nextKeyVal })
+									})
+									.catch((err) => {
+										//Error getting the primary key of the requested table
+										reject(err)
+									})
+
+								} else {
+									//primkey number
+									resolve({ cleanNeeded, schema: options.schema, table: options.table, maxKey, nextKeyVal })
+								}
+							})
+							.catch((err) => {
+								//Error getting the primary key of the requested table
+								reject(err)
+							})
+						})
+						.catch((err) => {
+							//Error getting the primary key of the requested table
+							reject(err)
+						})
+					
+				})
+				.catch((err) => {
+					//Error getting the primary key of the requested table
+					reject(err)
+				})
+			})
+		}
 	},
 };
 
@@ -942,6 +1053,7 @@ function processCases(cases, opArray) {
                 }
             }
 
+			resolve({doCases: true, valArray, valCases})
 
         } else {
             resolve({doCases: false})

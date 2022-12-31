@@ -1,5 +1,3 @@
-var {KindLogs} = require('kindlogs');
-
 exports.miniCSV = {
 	parse: (csv, delim) => {
 		if (!delim) {
