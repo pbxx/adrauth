@@ -12,72 +12,80 @@ var globals = {
 module.exports = {
   Adrauth: class {
     constructor(options, callback) {
-      //var self = this;
-      //console.log(`constructor start`, this)
+      //set default options
+      var defaultOptions = {
+        database: "single-json-file",
+        tokentimeout: 7,
+        tokenExpirationCheckInterval: 12. //in seconds
+      }
+      
+      //merge defaults with passed options
+      options = {
+        ...defaultOptions,
+        ...options,
+      }
+
+      this.classGlobals = {
+        credsRequired: true
+      }
+
       if (options.mode) {
+        //the mode must be set so adrauth knows what type of database to use
         if (options.mode == "postgres") {
           var { DBLink } = require("./connectors/postgres.js");
 
         } else if (options.mode == "single-json-file") {
           var { DBLink } = require("./connectors/singleJSON.js");
+          this.classGlobals.credsRequired = false
 
-        } else if (options.mode == "s3") {
-          var { DBLink } = require("./connectors/s3.js");
-          
         } else {
           callback(
             `mode setting does not match any compatible modes. got '${options.mode}'`
           );
         }
 
-          if (options.connect) {
-            if (!options.tokentimeout) {
-              options.tokentimeout = 7;
+        if ((this.classGlobals.credsRequired && options.connect) || this.classGlobals.credsRequired == false) {
+          //credentials passed, ready to start database connection
+          this.tokentimeout = options.tokentimeout;
+
+          //spawn the loop that will check for tokens
+          this.expiredTokenLoop = () => {
+            setTimeout(() => {
+              var now = new Date();
+              var nowTime = Math.round(now.getTime() / 1000);
+              //console.log(nowTime);
+
+              this.db
+                .delete("tokens", { expiry: nowTime }, ["<"])
+                .then((done) => {
+                  if (done.rowCount > 0) {
+                    console.log(`${done.rowCount} expired tokens were deleted`);
+                  }
+                  this.expiredTokenLoop();
+                })
+                .catch((err) => {
+                  console.error(err);
+                });
+            }, options.tokenExpirationCheckInterval * 1000);
+          };
+
+          //spawn a new Postgres DBLink
+          this.db = new DBLink(options.connect, (err, resp) => {
+            if (err) {
+              callback(err);
+            } else {
+              this.expiredTokenLoop(12);
+              //console.log(`DBLink created`, this);
+
+              callback(null, resp);
             }
+          });
 
-            //console.log(`DBLink omw`, this)
-            this.tokentimeout = options.tokentimeout;
-            //var self = this;
-            
-            //var clGlobals = this;
-            //spawn the loop that will check for tokens
-            this.expiredTokenLoop = (loopSecs) => {
-              setTimeout(() => {
-                var now = new Date();
-                var nowTime = Math.round(now.getTime() / 1000);
-                //console.log(nowTime);
-
-                this.db
-                  .delete("tokens", { expiry: nowTime }, ["<"])
-                  .then((done) => {
-                    if (done.rowCount > 0) {
-                      console.log(`${done.rowCount} expired tokens were deleted`);
-                    }
-                    this.expiredTokenLoop(loopSecs);
-                  })
-                  .catch((err) => {
-                    console.error(err);
-                  });
-              }, loopSecs * 1000);
-            };
-
-            //spawn a new Postgres DBLink
-            this.db = new DBLink(options.connect, (err, resp) => {
-              if (err) {
-                callback(err);
-              } else {
-                this.expiredTokenLoop(12);
-                //console.log(`DBLink created`, this);
-
-                callback(null, resp);
-              }
-            });
-
-          } else {
-            callback(
-              `connect setting required for ${options.mode}, object containing host, user, and password for connection`
-            );
-          }
+        } else {
+          callback(
+            `connect setting required for ${options.mode}. This is an object containing {host, user, password} for connection`
+          );
+        }
         
       } else {
         callback("mode setting is required to spawn adrauth");

@@ -252,125 +252,49 @@ module.exports = {
 					//object keys will become columns, object values will be written to those columns
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
-						
-						var oaIncrement = 0;
-						var valDollarIncrement = 1;
-						var valArray = [];
-						var valCases = "";
-						
-						if (typeof(cases) == "object" && !Array.isArray(cases)) {
-							var casesArr = Object.keys(cases);
-							if (casesArr.length > 1) {
-								//iterate through all keys
-								for (var ncase of casesArr) {
-									if (ncase == casesArr[casesArr.length-1]) {
-										//this is the last ncase
-										if (opArray) {
-											if (Array.isArray(opArray)) {
-												//an operator array was passed, and it is actually an array
-												if (typeof(opArray[oaIncrement]) == "string") {
-													valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
-													valArray.push(cases[ncase]);
-													valDollarIncrement++;
-													oaIncrement++;
-												} else {
-													//all opArray items must be string
-													reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-												}
-											} else {
-												//opArray must be array
-												reject(`[ERR: ${fName}] If third argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-											}
-										} else {
-											//no opArray was passed at all, or it was falsy
-											valCases += `${ncase} = ` + "$" + valDollarIncrement;
-											valArray.push(cases[ncase]);
-											valDollarIncrement++;
-										}
-									} else {
-										//this is *not* the last ncase
-										if (opArray) {
-											if (Array.isArray(opArray)) {
-												//an operator array was passed, and it is actually an array
-												if (typeof(opArray[oaIncrement]) == "string") {
-													valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
-													valArray.push(cases[ncase]);
-													valDollarIncrement++;
-													oaIncrement++;
-												} else {
-													//all opArray items must be string
-													reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-												}
-											} else {
-												//opArray must be array
-												reject(`[ERR: ${fName}] If third argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-											}
-										} else {
-											//no opArray was passed at all, or it was falsy
-											valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
-											valArray.push(cases[ncase]);
-											valDollarIncrement++;
-											
-										}
-									}
-								}
-							} else {
-								//only one ncase, no need to loop
-								if (opArray && Array.isArray(opArray)) {
-									valCases = `${casesArr[0]} ${opArray[0]} ` + "$1";
-									valArray.push(cases[casesArr[0]]);
-								} else {
-									valCases = `${casesArr[0]} = ` + "$1";
-									valArray.push(cases[casesArr[0]]);
-								}
-							}
-						}
+						processCases(cases, opArray)
+                        .then((valueSet) => {
+                            //valueSet is an object that contains:
+                            //valueSet.valArray: the Array that actually contains the data to be filtered
+                            //valueSet.valCases: literal SQL/native query string representing the templated $ values, to be inserted into the query
+                            if (typeof(cases) == "object" && !Array.isArray(cases)) {
+                                //selection cases were specified, select all from table where cases match
+                                var query = `SELECT * FROM ${table} WHERE ${valueSet.valCases};`;
 
-						if (typeof(cases) == "object" && !Array.isArray(cases)) {
-							this.pool.connect((err, client, release) => {
-								if (err) {
-									return console.error('Error acquiring client', err.stack)
-								}
-								var query = `SELECT * FROM ${table} WHERE ${valCases};`;
-								if (globals.consoleLog) { console.log(`[INFO ${fName}]`, valArray, valCases, query) }
-								client.query(query, valArray, (err, res) => {
-									if (err) {
-										//err writing to db
-										release()
-										reject(err)
-									}
-									//item written to db
-									release()
-									resolve(res)
-								})
-							})
-							
-							
-						} else {
-							this.pool.connect((err, client, release) => {
-								if (err) {
-									return console.error('Error acquiring client', err.stack)
-								}
-								var query = `SELECT * FROM ${table}`;
-								if (globals.consoleLog) { console.log(`[INFO ${fName}]`, valCases, query) }
-								client.query(query, (err, res) => {
-									if (err) {
-										//err writing to db
-										release()
-										reject(err)
-									} else {
-										//item written to db
-										release()
-										resolve(res)
-									}
-									
-								})
-							})
-						}
+                                dbQuery(this.pool, query, valueSet.valArray)
+                                .then((queryRes) => {
+                                    resolve(queryRes)
+                                })
+                                .catch((err) => {
+                                    reject(err)
+                                })
+                                
+                                
+                            } else {
+                                //no selection cases provided, select all from requested table
+                                var query = `SELECT * FROM ${table}`;
+                                
+                                dbQuery(this.pool, query)
+                                .then((queryRes) => {
+                                    resolve(queryRes)
+                                })
+                                .catch((err) => {
+                                    reject(err)
+                                })
+                            }
+                        })
+                        .catch((err) => {
+                            //error running processCases()
+                            //handle error
+                            reject({errText: `[ERR: ${fName}] Error running processCases()`, err})
+                        })
+
 					} else {
+                        //table name was not string
 						reject(`[ERR: ${fName}] First argument must be of type 'string', got '${typeof(table)}'.`)
 					}
 				} catch (err) {
+                    //general error occurred, in the whole try{}catch block
 					reject(err)
 				}
 			});
@@ -942,3 +866,125 @@ module.exports = {
 		}
 	},
 };
+
+
+function processCases(cases, opArray) {
+    return new Promise((resolve, reject) => {
+        var oaIncrement = 0;
+        var valDollarIncrement = 1;
+        var valArray = [];
+        var valCases = "";
+
+        if (typeof(cases) == "object" && !Array.isArray(cases)) {
+            var casesArr = Object.keys(cases);
+            if (casesArr.length > 1) {
+                //iterate through all keys
+                for (var ncase of casesArr) {
+                    if (ncase == casesArr[casesArr.length-1]) {
+                        //this is the last ncase
+                        if (opArray) {
+                            if (Array.isArray(opArray)) {
+                                //an operator array was passed, and it is actually an array
+                                if (typeof(opArray[oaIncrement]) == "string") {
+                                    valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
+                                    valArray.push(cases[ncase]);
+                                    valDollarIncrement++;
+                                    oaIncrement++;
+                                } else {
+                                    //all opArray items must be string
+                                    reject(`[ERR: ${fName}] All values in third argument array must be string.`);
+                                }
+                            } else {
+                                //opArray must be array
+                                reject(`[ERR: ${fName}] If third argument is used, it must be an array. Got '${typeof(opArray)}'.`);
+                            }
+                        } else {
+                            //no opArray was passed at all, or it was falsy
+                            valCases += `${ncase} = ` + "$" + valDollarIncrement;
+                            valArray.push(cases[ncase]);
+                            valDollarIncrement++;
+                        }
+                    } else {
+                        //this is *not* the last ncase
+                        if (opArray) {
+                            if (Array.isArray(opArray)) {
+                                //an operator array was passed, and it is actually an array
+                                if (typeof(opArray[oaIncrement]) == "string") {
+                                    valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
+                                    valArray.push(cases[ncase]);
+                                    valDollarIncrement++;
+                                    oaIncrement++;
+                                } else {
+                                    //all opArray items must be string
+                                    reject(`[ERR: ${fName}] All values in third argument array must be string.`);
+                                }
+                            } else {
+                                //opArray must be array
+                                reject(`[ERR: ${fName}] If third argument is used, it must be an array. Got '${typeof(opArray)}'.`);
+                            }
+                        } else {
+                            //no opArray was passed at all, or it was falsy
+                            valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
+                            valArray.push(cases[ncase]);
+                            valDollarIncrement++;
+                            
+                        }
+                    }
+                }
+            } else {
+                //only one ncase, no need to loop
+                if (opArray && Array.isArray(opArray)) {
+                    valCases = `${casesArr[0]} ${opArray[0]} ` + "$1";
+                    valArray.push(cases[casesArr[0]]);
+                } else {
+                    valCases = `${casesArr[0]} = ` + "$1";
+                    valArray.push(cases[casesArr[0]]);
+                }
+            }
+
+
+        } else {
+            resolve({doCases: false})
+        }
+    }) 
+}
+
+function dbQuery(pool, query, valArray) {
+    return new Promise((resolve, reject) => {
+        pool.connect((err, client, release) => {
+            if (err) {
+                return console.error('Error acquiring client', err.stack)
+            }
+            if (valArray) {
+                //an array of values was passed, which needs to be sent to the database
+                client.query(query, valArray, (err, res) => {
+                    if (err) {
+                        //err writing to db
+                        release()
+                        reject(err)
+                    } else {
+                        //item written to db
+                        release()
+                        resolve(res)
+                    }
+                    
+                })
+            } else {
+                //no values were passed, this request has no selection 
+                client.query(query, (err, res) => {
+                    if (err) {
+                        //err writing to db
+                        release()
+                        reject(err)
+                    } else {
+                        //item written to db
+                        release()
+                        resolve(res)
+                    }
+                    
+                })
+            }
+            
+        })
+    })
+}
