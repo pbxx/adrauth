@@ -63,6 +63,7 @@ module.exports = {
 							processValues(object)
 							.then((valueSet) => {
 								var query = `INSERT INTO ${table}(${valueSet.cols}) VALUES (${valueSet.valDollars});`;
+								console.log(query)
 								dbQuery(this.pool, query, valueSet.valArray)
                                 .then((queryRes) => {
                                     resolve(queryRes)
@@ -99,6 +100,7 @@ module.exports = {
 							processCases(cases, opArray)
                         	.then((valueSet) => {
 								var query = `DELETE FROM ${table} WHERE ${valueSet.valCases};`;
+								console.log(query)
 								dbQuery(this.pool, query, valueSet.valArray)
                                 .then((queryRes) => {
                                     resolve(queryRes)
@@ -139,7 +141,7 @@ module.exports = {
                             if (typeof(cases) == "object" && !Array.isArray(cases)) {
                                 //selection cases were specified, select all from table where cases match
                                 var query = `SELECT * FROM ${table} WHERE ${valueSet.valCases};`;
-
+								console.log(query)
                                 dbQuery(this.pool, query, valueSet.valArray)
                                 .then((queryRes) => {
                                     resolve(queryRes)
@@ -186,6 +188,7 @@ module.exports = {
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
 						var query = `SELECT reltuples AS estimate FROM pg_class WHERE relname = '${table}';`;
+						console.log(query)
 						dbQuery(this.pool, query, valueSet.valArray)
 						.then((queryRes) => {
 							resolve(queryRes)
@@ -210,7 +213,7 @@ module.exports = {
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
 						var query = `SELECT count(*) FROM ${table};`;
-
+						console.log(query)
 						dbQuery(this.pool, query, valueSet.valArray)
 						.then((queryRes) => {
 							resolve(queryRes)
@@ -239,7 +242,7 @@ module.exports = {
 								processCases(cases, opArray)
 								.then((valueSet) => {
 									var query = `SELECT ${cols} FROM ${table} WHERE ${valueSet.valCases};`;
-
+									console.log(query)
 									dbQuery(this.pool, query, valueSet.valArray)
 									.then((queryRes) => {
 										resolve(queryRes)
@@ -286,128 +289,26 @@ module.exports = {
 					//make sure <object> is an actual object
 					if (typeof(table) == "string") {
 						if (typeof(values) == "object" && !Array.isArray(values)) {
-							var oaIncrement = 0;
-							var valDollarIncrement = 1;
-							var valArray = [];
-							var valCases = "";
-							var valValues = "";
-							
 							if (typeof(cases) == "object" && !Array.isArray(cases)) {
-								//cases is set
-								var casesArr = Object.keys(cases);
-								if (casesArr.length > 1) {
-									//iterate through all keys
-									for (var ncase of casesArr) {
-										if (ncase == casesArr[casesArr.length-1]) {
-											//this is the last ncase
-											if (opArray) {
-												if (Array.isArray(opArray)) {
-													//an operator array was passed, and it is actually an array
-													if (typeof(opArray[oaIncrement]) == "string") {
-														valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
-														valArray.push(cases[ncase]);
-														valDollarIncrement++;
-														oaIncrement++;
-													} else {
-														//all opArray items must be string
-														reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-													}
-												} else {
-													//opArray must be array
-													reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-												}
-											} else {
-												//no opArray was passed at all, or it was falsy
-												valCases += `${ncase} = ` + "$" + valDollarIncrement;
-												valArray.push(cases[ncase]);
-												valDollarIncrement++;
-											}
-										} else {
-											//this is *not* the last ncase
-											if (opArray) {
-												if (Array.isArray(opArray)) {
-													//an operator array was passed, and it is actually an array
-													if (typeof(opArray[oaIncrement]) == "string") {
-														valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
-														valArray.push(cases[ncase]);
-														valDollarIncrement++;
-														oaIncrement++;
-													} else {
-														//all opArray items must be string
-														reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-													}
-												} else {
-													//opArray must be array
-													reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-												}
-											} else {
-												//no opArray was passed at all, or it was falsy
-												valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
-												valArray.push(cases[ncase]);
-												valDollarIncrement++;
-												
-											}
-										}
-									}
-								} else {
-									//only one ncase, no need to loop
-									if (opArray && Array.isArray(opArray)) {
-										valCases = `${casesArr[0]} ${opArray[0]} ` + "$" + valDollarIncrement;
-										valArray.push(cases[casesArr[0]]);
-										valDollarIncrement++;
-									} else {
-										valCases = `${casesArr[0]} = ` + "$" + valDollarIncrement;
-										valArray.push(cases[casesArr[0]]);
-										valDollarIncrement++;
-									}
-								}
-							}
-							
-							var keysArr = Object.keys(values);
-							if (keysArr.length > 1) {
-								//iterate through all keys
-								for (key of keysArr) {
-									if (key == keysArr[keysArr.length-1]) {
-										//this is the last key
-										valValues += `${key} = ` + "$" + valDollarIncrement;
-										valArray.push(values[key]);
-										valDollarIncrement++;
-										
-									} else {
-										//this is *not* the last key
-										valValues += `${key} = ` + "$" + valDollarIncrement + ", ";
-										valArray.push(values[key]);
-										valDollarIncrement++;
-									}
-								}
-							} else {
-								valValues = `${keysArr[0]} = ` + "$" + valDollarIncrement;
-								valArray.push(values[keysArr[0]]);
-								valDollarIncrement++;
-							}
-							
-							
-							//var query = `INSERT INTO ${table}(${cols}) VALUES (${valCases});`;
-							if (typeof(cases) == "object" && !Array.isArray(cases)) {
-								this.pool.connect((err, client, release) => {
-									if (err) {
-										return console.error('Error acquiring client', err.stack)
-									}
-									var query = `UPDATE ${table} SET ${valValues} WHERE ${valCases}`
-									if (globals.consoleLog) { console.log(`[INFO ${fName}]`, valArray, valValues, valCases)
-									console.log(`[INFO ${fName}]`, query) }
-									client.query(query, valArray, (err, res) => {
-										if (err) {
-											//err writing to db
-											release()
-											reject(err)
-										}
-										//item written to db
-										release()
-										resolve(res)
+								processCasesWithValues(cases, opArray, values)
+								.then((valueSet) => {
+									//var query = `SELECT ${cols} FROM ${table} WHERE ${valueSet.valCases};`;
+									var query = `UPDATE ${table} SET ${valueSet.valValues} WHERE ${valueSet.valCases}`
+									console.log(query)
+									dbQuery(this.pool, query, valueSet.valArray)
+									.then((queryRes) => {
+										resolve(queryRes)
+									})
+									.catch((err) => {
+										reject(err)
 									})
 								})
-								
+								.catch((err) => {
+									//error running processCases()
+									//handle error
+									reject({errText: `[ERR: ${fName}] Error running processCases()`, err})
+								})
+							
 								
 							} else {
 								this.pool.connect((err, client, release) => {
@@ -451,105 +352,26 @@ module.exports = {
 					if (table && typeof(table) == "string") {
 						if (values && typeof(values) == "string") {
 							if (inc && typeof(inc) == "number") {
-								var oaIncrement = 0;
-								var valDollarIncrement = 1;
-								var valArray = [];
-								var valCases = "";
-								var valValues = "";
-								
 								if (typeof(cases) == "object" && !Array.isArray(cases)) {
-									//cases is set
-									var casesArr = Object.keys(cases);
-									if (casesArr.length > 1) {
-										//iterate through all keys
-										for (var ncase of casesArr) {
-											if (ncase == casesArr[casesArr.length-1]) {
-												//this is the last ncase
-												if (opArray) {
-													if (Array.isArray(opArray)) {
-														//an operator array was passed, and it is actually an array
-														if (typeof(opArray[oaIncrement]) == "string") {
-															valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
-															valArray.push(cases[ncase]);
-															valDollarIncrement++;
-															oaIncrement++;
-														} else {
-															//all opArray items must be string
-															reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-														}
-													} else {
-														//opArray must be array
-														reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-													}
-												} else {
-													//no opArray was passed at all, or it was falsy
-													valCases += `${ncase} = ` + "$" + valDollarIncrement;
-													valArray.push(cases[ncase]);
-													valDollarIncrement++;
-												}
-											} else {
-												//this is *not* the last ncase
-												if (opArray) {
-													if (Array.isArray(opArray)) {
-														//an operator array was passed, and it is actually an array
-														if (typeof(opArray[oaIncrement]) == "string") {
-															valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
-															valArray.push(cases[ncase]);
-															valDollarIncrement++;
-															oaIncrement++;
-														} else {
-															//all opArray items must be string
-															reject(`[ERR: ${fName}] All values in third argument array must be string.`);
-														}
-													} else {
-														//opArray must be array
-														reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
-													}
-												} else {
-													//no opArray was passed at all, or it was falsy
-													valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
-													valArray.push(cases[ncase]);
-													valDollarIncrement++;
-													
-												}
-											}
-										}
-									} else {
-										//only one ncase, no need to loop
-										if (opArray && Array.isArray(opArray)) {
-											valCases = `${casesArr[0]} ${opArray[0]} ` + "$" + valDollarIncrement;
-											valArray.push(cases[casesArr[0]]);
-											valDollarIncrement++;
-										} else {
-											valCases = `${casesArr[0]} = ` + "$" + valDollarIncrement;
-											valArray.push(cases[casesArr[0]]);
-											valDollarIncrement++;
-										}
-									}
-								}
-								
-								//var query = `INSERT INTO ${table}(${cols}) VALUES (${valCases});`;
-								if (typeof(cases) == "object" && !Array.isArray(cases)) {
-									this.pool.connect((err, client, release) => {
-										if (err) {
-											return console.error('Error acquiring client', err.stack)
-										}
-										var query = `UPDATE ${table} SET ${values} = ${values} + ${inc} WHERE ${valCases};`
-										if (globals.consoleLog) { console.log(`[INFO ${fName}]`, valArray, valCases)
-										console.log(`[INFO ${fName}]`, query) }
-										client.query(query, valArray, (err, res) => {
-											if (err) {
-												//err writing to db
-												release()
-												reject(err)
-											}
-											//item written to db
-											release()
-											resolve(res)
+									processCases(cases, opArray)
+									.then((valueSet) => {
+										//var query = `SELECT ${cols} FROM ${table} WHERE ${valueSet.valCases};`;
+										var query = `UPDATE ${table} SET ${values} = ${values} + ${inc} WHERE ${valueSet.valCases};`
+										console.log(query)
+										dbQuery(this.pool, query, valueSet.valArray)
+										.then((queryRes) => {
+											resolve(queryRes)
+										})
+										.catch((err) => {
+											reject(err)
 										})
 									})
-									
-									
+									.catch((err) => {
+										//error running processCases()
+										//handle error
+										reject({errText: `[ERR: ${fName}] Error running processCases()`, err})
+									})
+
 								} else {
 									this.pool.connect((err, client, release) => {
 										if (err) {
@@ -784,6 +606,113 @@ function processCases(cases, opArray) {
     }) 
 }
 
+function processCasesWithValues(cases, opArray, values) {
+    return new Promise((resolve, reject) => {
+		var oaIncrement = 0;
+		var valDollarIncrement = 1;
+		var valArray = [];
+		var valCases = "";
+		var valValues = "";
+		
+		if (typeof(cases) == "object" && !Array.isArray(cases)) {
+			//cases is set
+			var casesArr = Object.keys(cases);
+			if (casesArr.length > 1) {
+				//iterate through all keys
+				for (var ncase of casesArr) {
+					if (ncase == casesArr[casesArr.length-1]) {
+						//this is the last ncase
+						if (opArray) {
+							if (Array.isArray(opArray)) {
+								//an operator array was passed, and it is actually an array
+								if (typeof(opArray[oaIncrement]) == "string") {
+									valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement;
+									valArray.push(cases[ncase]);
+									valDollarIncrement++;
+									oaIncrement++;
+								} else {
+									//all opArray items must be string
+									reject(`[ERR: ${fName}] All values in third argument array must be string.`);
+								}
+							} else {
+								//opArray must be array
+								reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
+							}
+						} else {
+							//no opArray was passed at all, or it was falsy
+							valCases += `${ncase} = ` + "$" + valDollarIncrement;
+							valArray.push(cases[ncase]);
+							valDollarIncrement++;
+						}
+					} else {
+						//this is *not* the last ncase
+						if (opArray) {
+							if (Array.isArray(opArray)) {
+								//an operator array was passed, and it is actually an array
+								if (typeof(opArray[oaIncrement]) == "string") {
+									valCases += `${ncase} ${opArray[oaIncrement]} ` + "$" + valDollarIncrement + " AND ";
+									valArray.push(cases[ncase]);
+									valDollarIncrement++;
+									oaIncrement++;
+								} else {
+									//all opArray items must be string
+									reject(`[ERR: ${fName}] All values in third argument array must be string.`);
+								}
+							} else {
+								//opArray must be array
+								reject(`[ERR: ${fName}] If fourth argument is used, it must be an array. Got '${typeof(opArray)}'.`);
+							}
+						} else {
+							//no opArray was passed at all, or it was falsy
+							valCases += `${ncase} = ` + "$" + valDollarIncrement + " AND ";
+							valArray.push(cases[ncase]);
+							valDollarIncrement++;
+							
+						}
+					}
+				}
+			} else {
+				//only one ncase, no need to loop
+				if (opArray && Array.isArray(opArray)) {
+					valCases = `${casesArr[0]} ${opArray[0]} ` + "$" + valDollarIncrement;
+					valArray.push(cases[casesArr[0]]);
+					valDollarIncrement++;
+				} else {
+					valCases = `${casesArr[0]} = ` + "$" + valDollarIncrement;
+					valArray.push(cases[casesArr[0]]);
+					valDollarIncrement++;
+				}
+			}
+		}
+		
+		var keysArr = Object.keys(values);
+		if (keysArr.length > 1) {
+			//iterate through all keys
+			for (key of keysArr) {
+				if (key == keysArr[keysArr.length-1]) {
+					//this is the last key
+					valValues += `${key} = ` + "$" + valDollarIncrement;
+					valArray.push(values[key]);
+					valDollarIncrement++;
+					
+				} else {
+					//this is *not* the last key
+					valValues += `${key} = ` + "$" + valDollarIncrement + ", ";
+					valArray.push(values[key]);
+					valDollarIncrement++;
+				}
+			}
+		} else {
+			valValues = `${keysArr[0]} = ` + "$" + valDollarIncrement;
+			valArray.push(values[keysArr[0]]);
+			valDollarIncrement++;
+		}
+
+		resolve({valArray, valCases, valValues})
+
+	})
+}
+
 function processValues(object) {
 	return new Promise((resolve, reject) => {
 		try {
@@ -823,6 +752,8 @@ function processValues(object) {
 
 	})
 }
+
+
 
 function dbQuery(pool, query, valArray) {
     return new Promise((resolve, reject) => {

@@ -74,7 +74,7 @@ describe("Maintenance Operations", () => {
 })
 
 describe("Insert and modify operations", () => {
-    it("should successfully insert a record into a specified table", () => {
+    it("should successfully INSERT a record into a specified table", () => {
         //test database insert
         return adrauth.db.insert("semantics", {name: "testSem", val: "I work well!"})
         .then((res) => {
@@ -86,7 +86,19 @@ describe("Insert and modify operations", () => {
             console.error(err)
         })
     })
-    it("should successfully delete a record from a specified table", () => {
+    it("should successfully UPDATE a record in a specified table", () => {
+        //test database update
+        return adrauth.db.update("semantics", {val: "I've been updated!!!"}, {name: "testSem", val: "I work well!"})
+        .then((res) => {
+            assert.typeOf( res, "object" )
+            assert.isArray( res.rows )
+            
+        })
+        .catch(err => {
+            console.error(err)
+        })
+    })
+    it("should successfully DELETE a record from a specified table", () => {
         //test database insert
         return adrauth.db.delete("semantics", {name: "testSem"})
         .then((res) => {
